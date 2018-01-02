@@ -6,10 +6,6 @@ import java.util.Random;
 
 public class Network {
 	
-	public static class Perceptron {
-		//I'm not sure if you would want this
-	}
-
 	public static class Neuron {
 
 		private Map<Neuron, Double> weights = new LinkedHashMap<>();
