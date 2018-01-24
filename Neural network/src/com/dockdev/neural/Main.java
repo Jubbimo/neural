@@ -1,83 +1,70 @@
 package com.dockdev.neural;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 
-import javax.imageio.ImageIO;
+import com.dockdev.neural.testbase.Test;
 
-import com.dockdev.neural.Network.Neuron;
+import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
+import io.github.lukehutch.fastclasspathscanner.scanner.ScanResult;
 
 public class Main {
 
 	private static Scanner console;
+	public static Logger logger = new Logger();
 
-	public static void main(String[] args) throws IOException {
-		if (System.console() == null) {
-//			throw new RuntimeException("Launch the application from the console");
-		}
-		console = new Scanner(System.in);
-		
-		System.out.println("Type a text file path:");
-		File file = new File(console.nextLine());
-		if (!(file.isFile() && file.exists())) {
-			throw new FileNotFoundException("The file must be an existing file on your filesystem");
-		}
-		Map<File, String[]> ioass = new LinkedHashMap<>();
-		
-		Scanner test = new Scanner(file);
-		for (int i = 0; test.hasNextLine(); i++) {
-			String[] line = test.nextLine().split("-");
-			try {
-				File img = new File(line[0]);
-				if (!img.exists()) throw new FileNotFoundException();
-				ioass.put(img, line[1].split(","));
-			} catch (FileNotFoundException e) {
-				System.out.println("File path at line " + i + " could not be resolved. Skipping.");
-			}
-		}
-		test.close();
-		
+	public static ArrayList<String> metadata = new ArrayList<>();
+	
+	@SuppressWarnings(
+		"unchecked"
+	)
+	public static void main(String[] args) throws Exception {
 		/*
 		 * This file will contain the data telling the code what to do. 
 		 * Line 1: An integer determining the number of layers
 		 * Line 2: An integer determining the number of neurons per layer
 		 * Line 3: An integer determining the number of output neurons
+		 * Line 4: The classpath of the test class
+		 * Line 5: The input file path
 		 */
 		File meta = new File("metadata.txt");
 		
-		int[] metadata = new int[3];
+		//Reads the file and saves it to the metadata list
 		Scanner metascanner = new Scanner(meta);
+		while (metascanner.hasNextLine()) {
+			metadata.add(metascanner.nextLine());
+		} metascanner.close();
 		
-		metadata[0] = metascanner.nextInt();
-		metadata[1] = metascanner.nextInt();
-		metadata[2] = metascanner.nextInt();
+		//Creates the network
+		Network network = new Network(Integer.valueOf(metadata.get(0)), Integer.valueOf(metadata.get(1))).setOutput(Integer.valueOf(metadata.get(2)));
 		
-		metascanner.close();
-		
-		//TODO: Change to iterative method
-		Input.image = ImageIO.read(ioass.keySet().toArray(new File[0])[0]);
-		
-		Network network = new Network(metadata[0], metadata[1]).setOutput(metadata[2]);
-		
-		System.out.println("\nReading input");
-		network.setInput(Input.read());
-		System.out.println("Randomizing weights");
-		network.linkLayers();
-		network.randomise();
-		
-		System.out.println("Computing result");
-		Neuron[] output = network.compute();
-		
-		for (Neuron neuron : output) {
-			System.out.println(neuron);
+		//Scans the input test file and tries to link it to a class
+		ScanResult classpath = new FastClasspathScanner(metadata.get(3)).scan();
+		Class<?> cls = classpath.classNameToClassRef(classpath.getNamesOfAllClasses().get(0));
+
+		Class<? extends Test> testcls = null;
+		try {
+			Object instance = cls.newInstance();
+			if (instance instanceof Test) {
+				testcls = (Class<? extends Test>) cls;
+			} else {
+				throw new IllegalArgumentException("the given test file is not an instance of com.dockdev.neural.Test");
+			}
+		} catch (InstantiationException | IllegalAccessException | IllegalArgumentException e) {
+			logger.error(e.toString());
 		}
 		
-		return;
+		Test test = testcls.newInstance();
+		try {
+			//Runs test in the set class
+			test.read(new File(metadata.get(4)));
+			test.test(network);
+		} catch (IOException e) {
+			logger.error(e.toString());
+		}
 	}
 	
 	public static double random(double min, double d) {

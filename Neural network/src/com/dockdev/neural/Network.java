@@ -1,5 +1,9 @@
 package com.dockdev.neural;
 
+import static com.dockdev.neural.Main.logger;
+
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Random;
@@ -13,6 +17,7 @@ public class Network {
 		public double bias = 0;
 		
 		private volatile double value;
+		public volatile double lastSigmoid;
 
 		private Random gaussian = new Random();
 		
@@ -20,14 +25,25 @@ public class Network {
 		public double getValue() {return value;}
 		public void setValue(double value) {this.value = value;}
 
+		/**
+		 * Makes a new Neuron with the value 0
+		 */
 		public Neuron() {
 			this(0);
 		}
 		
+		/**
+		 * Makes a new Neuron with a predefined value
+		 * @param d the value of the Neuron
+		 */
 		public Neuron(double d) {
 			value = d;
 		}
 		
+		/**
+		 * Randomises the weights according to a Gaussian scale and associates them with Neurons from the previous layer
+		 * @param input the layer before the layer this Neuron is in
+		 */
 		public Neuron randomWeights(Layer input) {
 			for (Neuron neuron : input.getContents()) {
 				weights.put(neuron, gaussian.nextGaussian());
@@ -35,11 +51,20 @@ public class Network {
 			return this;
 		}
 		
+		/**
+		 * Sets the weight associated with the specified neuron
+		 * @param input the Neuron to adjust the weight for
+		 * @param bias the value to set the weight to
+		 */
 		public Neuron setWeight(Neuron input, double bias) {
 			weights.put(input, bias);
 			return this;
 		}
 		
+		/**
+		 * Updates the value of this Neuron based on the previous layer
+		 * @param input the previous layer
+		 */
 		public Neuron feed(Layer input) {
 			double newValue = 0;
 			for (Neuron neuron : input.contents) {
@@ -52,8 +77,9 @@ public class Network {
 				newValue+= weight * neuron.value;
 			}
 			newValue-= bias;
-			value = Main.sigmoid(newValue / input.size());
-			System.out.println(newValue/input.size() + " -> " + value);
+			lastSigmoid = newValue / input.size();
+			value = Main.sigmoid(lastSigmoid);
+			logger.debug(String.format("Input: %f -> %f", newValue, value));
 			return this;
 		}
 		
@@ -63,7 +89,7 @@ public class Network {
 		}
 	}
 
-	public static class Layer {
+	public static class Layer implements Iterable<Neuron>{
 
 		public Layer(int neurons) {
 			contents = new Neuron[neurons];
@@ -123,6 +149,19 @@ public class Network {
 			if (next == null) return;
 			next.updateForward();
 		}
+
+		public double[] getValues() {
+			double[] out = new double[contents.length];
+			for (int i = 0; i < contents.length; i++) {
+				out[i] = contents[i].value;
+			}
+			return null;
+		}
+
+		@Override
+		public Iterator<Neuron> iterator() {
+			return Arrays.asList(contents).iterator();
+		}
 	}
 
 	private Neuron[] inputNeurons;
@@ -154,6 +193,10 @@ public class Network {
 		return this;
 	}
 	
+	public Layer getOutput() {
+		return outputLayer;
+	}
+	
 	public Network linkLayers() {
 		layers[0].setPrevious(inputLayer = new Layer(inputNeurons)).setNext(layers[1]);
 		for (int i = 1; i < layers.length-1; i++) {
@@ -178,5 +221,29 @@ public class Network {
 		}
 		outputLayer.update(layers[layers.length-1]);
 		return outputNeurons;
+	}
+	
+	public double findCost(Neuron[] expected) {
+		double cost = 0;
+		for (int i = 0; i < Math.min(expected.length, outputNeurons.length)-1; i++) {
+			cost+= (Math.pow(outputNeurons[i].getValue() - expected[i].getValue(), 2));
+		}
+		return cost;
+	}
+	
+	public int size() {
+		int sum = 0;
+		for (int i = layers.length-1; i > 0; i--) {
+			sum += layers[i].contents.length;
+		}
+		return sum;
+	}
+
+	public int weightSum() {
+		int sum = 0;
+		for (int i = layers.length-1; i > 0; i--) {
+			sum += layers[i].contents.length * layers[i-1].contents.length;
+		}
+		return sum;
 	}
 }

@@ -1,3 +1,5 @@
 2
 16
 10
+src/com/dockdev/neural/testbase/ImageTest.java
+res/test.txt
